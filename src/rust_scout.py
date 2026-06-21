@@ -1,46 +1,54 @@
-import argparse
 import json
 from dataclasses import dataclass
+from email.message import EmailMessage
+import smtplib
 from typing import List
 
 @dataclass
-class Crate:
+class Library:
     name: str
     version: str
-    description: str
-    link: str
+    changelog: str
 
-def search_crates(query: str) -> List[Crate]:
-    # Simulate searching for crates
-    crates = [
-        Crate("crate1", "1.0.0", "A short description", "https://crates.io/crate1"),
-        Crate("crate2", "2.0.0", "Another short description", "https://crates.io/crate2"),
-        Crate("crate3", "3.0.0", "Yet another short description", "https://crates.io/crate3"),
+@dataclass
+class User:
+    email: str
+    rust_toolchain: str
+
+def send_email_notification(library: Library, user: User):
+    msg = EmailMessage()
+    msg.set_content(f"New version of {library.name} available: {library.version}\nChangelog: {library.changelog}")
+    msg['Subject'] = f"New version of {library.name} available"
+    msg['From'] = "rust-scout@example.com"
+    msg['To'] = user.email
+    with smtplib.SMTP_SSL("smtp.example.com", 465) as smtp:
+        smtp.login("rust-scout@example.com", "password")
+        smtp.send_message(msg)
+
+def check_version_compatibility(library: Library, user: User):
+    if library.version != user.rust_toolchain:
+        return f"Version {library.version} is not compatible with your current Rust toolchain {user.rust_toolchain}"
+    return None
+
+def get_one_click_upgrade_instructions(library: Library):
+    return f"Run `cargo update {library.name}` to upgrade to version {library.version}"
+
+def main():
+    libraries = [
+        Library("library1", "1.2.3", "Fixed bug"),
+        Library("library2", "4.5.6", "Added feature")
     ]
-    return [crate for crate in crates if query.lower() in crate.name.lower()]
-
-def add_crate(crate_name: str, cargo_toml: str) -> None:
-    # Simulate adding a crate to Cargo.toml
-    with open(cargo_toml, "a") as f:
-        f.write(f"[dependencies]\n{crate_name} = \"1.0.0\"\n")
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Rust Scout CLI tool")
-    subparsers = parser.add_subparsers(dest="command")
-    search_parser = subparsers.add_parser("search")
-    search_parser.add_argument("query", help="Search query")
-    add_parser = subparsers.add_parser("add")
-    add_parser.add_argument("crate", help="Crate name")
-    add_parser.add_argument("--cargo-toml", default="Cargo.toml", help="Path to Cargo.toml")
-    args = parser.parse_args()
-    if args.command == "search":
-        crates = search_crates(args.query)
-        for crate in crates[:5]:
-            print(json.dumps(crate.__dict__))
-    elif args.command == "add":
-        add_crate(args.crate, args.cargo_toml)
-    else:
-        parser.print_help()
+    users = [
+        User("user1@example.com", "1.2.3"),
+        User("user2@example.com", "4.5.6")
+    ]
+    for library in libraries:
+        for user in users:
+            send_email_notification(library, user)
+            compatibility_warning = check_version_compatibility(library, user)
+            if compatibility_warning:
+                print(compatibility_warning)
+            print(get_one_click_upgrade_instructions(library))
 
 if __name__ == "__main__":
     main()
