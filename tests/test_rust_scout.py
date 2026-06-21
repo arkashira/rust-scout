@@ -1,39 +1,115 @@
 import pytest
-from rust_scout import send_email_notification, check_version_compatibility, get_one_click_upgrade_instructions, main
-from unittest.mock import patch, MagicMock
-from email.message import EmailMessage
+from rust_scout import Library, LibraryManager
+from datetime import datetime, timedelta
+
 
 @pytest.fixture
-def library():
-    return type("Library", (), {"name": "library1", "version": "1.2.3", "changelog": "Fixed bug"})
+def manager():
+    mgr = LibraryManager()
+    mgr.update_libraries()
+    return mgr
 
-@pytest.fixture
-def user():
-    return type("User", (), {"email": "user1@example.com", "rust_toolchain": "1.2.3"})
 
-def test_send_email_notification(library, user):
-    with patch("smtplib.SMTP_SSL") as mock_smtp:
-        mock_smtp.return_value.__enter__.return_value.login = MagicMock()
-        mock_smtp.return_value.__enter__.return_value.send_message = MagicMock()
-        send_email_notification(library, user)
-        mock_smtp.return_value.__enter__.return_value.send_message.assert_called_once()
+def test_library_creation():
+    lib = Library(
+        name="TestLib",
+        description="A test library",
+        category="Test",
+        stars=100,
+        rating=4.0,
+        performance_score=80,
+        reviews=["Good"],
+        last_updated=datetime.now()
+    )
+    assert lib.name == "TestLib"
+    assert lib.stars == 100
 
-def test_check_version_compatibility(library, user):
-    assert check_version_compatibility(library, user) is None
-    library.version = "4.5.6"
-    assert check_version_compatibility(library, user) == "Version 4.5.6 is not compatible with your current Rust toolchain 1.2.3"
 
-def test_get_one_click_upgrade_instructions(library):
-    assert get_one_click_upgrade_instructions(library) == "Run `cargo update library1` to upgrade to version 1.2.3"
+def test_library_matches_search(manager):
+    libs = manager.get_libraries(search_query="tokio")
+    assert len(libs) == 1
+    assert libs[0].name == "Tokio"
+    
+    # Case insensitive check
+    libs = manager.get_libraries(search_query="SERDE")
+    assert len(libs) == 1
+    assert libs[0].name == "Serde"
 
-def test_main():
-    with patch("rust_scout.send_email_notification") as mock_send_email_notification:
-        with patch("rust_scout.check_version_compatibility") as mock_check_version_compatibility:
-            with patch("rust_scout.get_one_click_upgrade_instructions") as mock_get_one_click_upgrade_instructions:
-                mock_send_email_notification.return_value = None
-                mock_check_version_compatibility.return_value = None
-                mock_get_one_click_upgrade_instructions.return_value = "instructions"
-                main()
-                mock_send_email_notification.assert_called()
-                mock_check_version_compatibility.assert_called()
-                mock_get_one_click_upgrade_instructions.assert_called()
+
+def test_library_search_no_match(manager):
+    libs = manager.get_libraries(search_query="nonexistentlibraryxyz")
+    assert len(libs) == 0
+
+
+def test_filter_by_category(manager):
+    libs = manager.get_libraries(category="Web")
+    assert len(libs) == 1
+    assert libs[0].name == "Actix"
+    
+    libs = manager.get_libraries(category="Async")
+    assert len(libs) == 1
+    assert libs[0].name == "Tokio"
+
+
+def test_filter_by_rating(manager):
+    # Filter for high rating
+    libs = manager.get_libraries(min_rating=4.9)
+    assert len(libs) == 2
+    names = {lib.name for lib in libs}
+    assert "Tokio" in names
+    assert "Serde" in names
+    
+    # Filter for very high rating (only Serde is 4.95)
+    libs = manager.get_libraries(min_rating=4.94)
+    assert len(libs) == 1
+    assert libs[0].name == "Serde"
+
+
+def test_combined_filters(manager):
+    # Search for "web" framework with rating > 4.0
+    libs = manager.get_libraries(search_query="web", min_rating=4.0)
+    assert len(libs) == 1
+    assert libs[0].name == "Actix"
+
+
+def test_sort_by_stars(manager):
+    libs = manager.get_libraries(sort_by_stars=True)
+    assert len(libs) > 0
+    # Serde has 31000, Tokio 24500, Actix 18500...
+    assert libs[0].name == "Serde"
+    assert libs[1].name == "Tokio"
+    assert libs[2].name == "Actix"
+
+
+def test_update_needed_initially():
+    mgr = LibraryManager()
+    assert mgr.is_update_needed() is True
+
+
+def test_update_needed_after_fetch(manager):
+    # Just updated, so should not be needed
+    assert manager.is_update_needed() is False
+
+
+def test_get_library_names(manager):
+    names = manager.get_library_names()
+    assert isinstance(names, list)
+    assert "Tokio" in names
+    assert "Serde" in names
+    assert len(names) == 5
+
+
+def test_edge_case_empty_query(manager):
+    # Empty query should return everything (respecting other filters)
+    libs = manager.get_libraries(search_query="")
+    assert len(libs) == 5
+
+
+def test_edge_case_rating_boundary(manager):
+    # Diesel has 4.5 rating
+    libs = manager.get_libraries(min_rating=4.5)
+    assert len(libs) == 5 # All are >= 4.5
+    
+    libs = manager.get_libraries(min_rating=4.51)
+    assert len(libs) == 4 # Diesel (4.5) is excluded
+    assert "Diesel" not in [l.name for l in libs]
