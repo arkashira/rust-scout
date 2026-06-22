@@ -1,5 +1,5 @@
-# Rust Libraries
-A Python project for curating and benchmarking Rust libraries.
+# Auth
+A simple authentication and subscription management system.
 
-## Installation
-To install the project, run the following command:
+## Usage
+Create an account and log in to access premium features.
