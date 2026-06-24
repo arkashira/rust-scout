@@ -1,40 +1,36 @@
-from rust_scout import RustScout, TestResult
+import pytest
+from rust_scout import calculate_star_trend_score, calculate_performance_score, calculate_security_score, calculate_composite_score, rank_crates, load_crates
 
-def test_run_unit_tests():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    results = rust_scout.run_unit_tests()
-    assert len(results) == 10
-    assert all(result.passed for result in results)
+def test_calculate_star_trend_score():
+    assert calculate_star_trend_score(100, 120) == 20.0
+    assert calculate_star_trend_score(0, 100) == 0
 
-def test_run_e2e_tests():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    results = rust_scout.run_e2e_tests()
-    assert len(results) == 3
-    assert all(result.passed for result in results)
+def test_calculate_performance_score():
+    assert calculate_performance_score(90) == 100
+    assert calculate_performance_score(80) == 80
 
-def test_check_code_coverage():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    assert rust_scout.check_code_coverage()
-    rust_scout = RustScout(0.7, ["search", "detail_page", "subscription_flow"])
-    assert not rust_scout.check_code_coverage()
+def test_calculate_security_score():
+    assert calculate_security_score(0) == 100
+    assert calculate_security_score(1) == 90
+    assert calculate_security_score(10) == 0
 
-def test_check_e2e_tests():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    assert rust_scout.check_e2e_tests()
-    rust_scout = RustScout(0.8, ["search", "detail_page"])
-    assert not rust_scout.check_e2e_tests()
+def test_calculate_composite_score():
+    assert calculate_composite_score(20, 100, 90) == (20 * 0.4) + (100 * 0.35) + (90 * 0.25)
 
-def test_run_all_tests():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    results = rust_scout.run_all_tests()
-    assert len(results) == 13
-    assert all(result.passed for result in results)
+def test_rank_crates():
+    crates_data = [
+        {'name': 'crate1', 'stars': 100, 'stars_30_days_ago': 80, 'performance_score': 90, 'security_score': 100, 'cves': 0},
+        {'name': 'crate2', 'stars': 120, 'stars_30_days_ago': 100, 'performance_score': 80, 'security_score': 90, 'cves': 1},
+    ]
+    crates = load_crates(crates_data)
+    ranked_crates = rank_crates(crates)
+    assert ranked_crates[0][0] == 'crate1'
 
-def test_check_all_tests_passed():
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    assert rust_scout.check_all_tests_passed()
-    rust_scout = RustScout(0.8, ["search", "detail_page", "subscription_flow"])
-    rust_scout.e2e_tests[0] = "failed_test"
-    rust_scout.run_all_tests()
-    rust_scout.test_results[0].passed = False
-    assert not rust_scout.check_all_tests_passed()
+def test_load_crates():
+    crates_data = [
+        {'name': 'crate1', 'stars': 100, 'stars_30_days_ago': 80, 'performance_score': 90, 'security_score': 100, 'cves': 0},
+        {'name': 'crate2', 'stars': 120, 'stars_30_days_ago': 100, 'performance_score': 80, 'security_score': 90, 'cves': 1},
+    ]
+    crates = load_crates(crates_data)
+    assert len(crates) == 2
+    assert crates[0].name == 'crate1'
